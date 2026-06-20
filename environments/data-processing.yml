@@ -1,0 +1,16 @@
+name: gr00t-data
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - ffmpeg                    # video copying / inspection
+  - pip
+  - pip:
+    - numpy>=1.26
+    - pandas>=2.0
+    - pyarrow>=14.0           # parquet read/write
+    - scipy>=1.11             # Rotation (quat → rot6d conversion)
+    - huggingface_hub>=0.20   # dataset download from HF Hub
+    - tqdm
+    - rich
