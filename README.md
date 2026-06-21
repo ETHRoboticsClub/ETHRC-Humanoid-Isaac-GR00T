@@ -41,6 +41,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone the repo
 git clone <repo-url>
+git checkout rguntz/dev
 cd ETHRC-Humanoid-Isaac-GR00T
 
 # Create the virtual environment and install all dependencies
@@ -94,7 +95,6 @@ End-to-end workflow for fine-tuning GR00T N1.7 on the Unitree G1 locomanipulatio
 |---|---|---|
 | `left_eef_rot6d` | 9 | Left wrist current pose: xyz(3) + rot6d(6) |
 | `right_eef_rot6d` | 9 | Right wrist current pose: xyz(3) + rot6d(6) |
-| `robot_base_rot6d` | 9 | Base pose in world frame: xyz(3) + rot6d(6) |
 | `ego_view` | 360×640×3 | Front RGB camera |
 | Language annotation | string | Task description |
 
@@ -104,17 +104,16 @@ The dataset is hosted on HuggingFace in LeRobot v2.1 format. `huggingface-cli` i
 available after `uv sync` (it ships with `huggingface_hub`).
 
 ```bash
-source .venv/bin/activate
-
+conda activate gr00t-data
 # Log in if the dataset repo is private
-huggingface-cli login
+hf auth login
 
-huggingface-cli download <HF-DATASET-REPO> \
+cd /home/rguntz/Desktop/ETHRC-Humanoid-Isaac-GR00T
+
+hf download ETHRC-humanoid/g1-sim-locomanipulation \
     --repo-type dataset \
-    --local-dir ./data/g1-locomanip-raw
+    --local-dir ./datasets/g1-sim-locomanipulation
 ```
-
-> Replace `<HF-DATASET-REPO>` with the actual HuggingFace dataset repo (e.g. `ETHRC-humanoid/g1-sim-locomanipulation`).
 
 ### 4.2 Convert dataset (quat → rot6d)
 
@@ -132,7 +131,7 @@ columns added — the original is never modified.
 | `observation.robot_base_pose` | `--base-pose-key` | 7 | x, y, z, qx, qy, qz, qw |
 
 ```bash
-source .venv/bin/activate
+conda activate gr00t-data
 
 python scripts/convert_eef_quat_to_rot6d.py \
     --dataset-path    /path/to/your/raw/dataset \
@@ -156,13 +155,22 @@ Named slices are also registered in `meta/modality.json` and `meta/info.json` au
 ### 4.3 Download base model
 
 ```bash
-source .venv/bin/activate
+conda activate gr00t-data
 
-huggingface-cli download nvidia/GR00T-N1.7-3B \
+hf download nvidia/GR00T-N1.7-3B \
     --local-dir ./models/GR00T-N1.7-3B
 ```
 
 This downloads ~6 GB. The model is public — no login required.
+
+> **Cosmos-Reason2-2B access required.** GR00T N1.7 uses `nvidia/Cosmos-Reason2-2B` as its VLM
+> backbone. The weights are bundled in the GR00T download above, but the backbone architecture
+> config is fetched from HuggingFace at runtime. Request access at
+> https://huggingface.co/nvidia/Cosmos-Reason2-2B (approval is typically fast), then log in:
+>
+> ```bash
+> hf auth login
+> ```
 
 ### 4.4 Generate statistics
 
@@ -175,7 +183,7 @@ source .venv/bin/activate
 
 python gr00t/data/stats.py \
     --dataset-path        ./data/g1-locomanip-rot6d \
-    --embodiment-tag      new_embodiment \
+    --embodiment-tag      NEW_EMBODIMENT \
     --modality-config-path examples/G1-LocoManip/g1_locomanip_config.py
 ```
 
@@ -201,93 +209,3 @@ GLOBAL_BATCH_SIZE=64    # default: 32
 USE_WANDB=0             # disable W&B logging
 ```
 
----
-
-## 5. Adding a new robot
-
-1. **Check if a built-in embodiment tag fits** — see `gr00t/data/embodiment_tags.py` for the full list.
-
-2. **If not, write a modality config** — copy `examples/SO100/so100_config.py` as a starting point. The keys in `modality_keys` must exactly match the named slices defined in your dataset's `meta/modality.json`.
-
-3. **Register and train:**
-   ```bash
-   # Generate stats
-   python gr00t/data/stats.py \
-       --dataset-path <path> \
-       --embodiment-tag new_embodiment \
-       --modality-config-path <your_config.py>
-
-   # Fine-tune
-   bash examples/finetune.sh \
-       --base-model-path nvidia/GR00T-N1.7-3B \
-       --dataset-path    <path> \
-       --embodiment-tag  new_embodiment \
-       --modality-config-path <your_config.py> \
-       --output-dir      <out>
-   ```
-
-4. **EEF orientation as relative actions** — if your dataset stores EEF poses as quaternions and you want proper SE(3) relative actions (`q_target ⊗ q_current⁻¹`), run the conversion script first:
-   ```bash
-   python scripts/convert_eef_quat_to_rot6d.py \
-       --dataset-path  <raw> \
-       --output-path   <converted> \
-       --quat-order    wxyz   # or xyzw, check your data collection code
-   ```
-   Then use `ActionType.EEF + ActionFormat.XYZ_ROT6D + ActionRepresentation.RELATIVE` in your modality config.
-
-See `getting_started/data_config.md` for a full explanation of `ModalityConfig` fields.
-
----
-
-## 6. Directory layout
-
-```
-gr00t/              Main package
-  configs/          Training, data, and model configs
-  data/             Data loading, embodiment tags, dataset processing
-  eval/             Evaluation (run_gr00t_server.py)
-  experiment/       Training pipeline (launch_finetune.py, trainer.py)
-  model/            Model architecture (N1.7, base, modules)
-  policy/           Policy inference (Gr00tPolicy, server/client)
-
-examples/           Per-embodiment example configs and scripts
-  finetune.sh       Generic fine-tuning launcher
-  G1-LocoManip/     G1 locomanipulation — config + finetune script
-  SO100/            SO-100 tabletop arm example
-  LIBERO/           LIBERO benchmark example
-
-scripts/            Utility and deployment scripts
-  convert_eef_quat_to_rot6d.py   Dataset conversion: quat → rot6d
-  deployment/       Platform install scripts (dgpu, orin, thor, spark)
-
-environments/       Conda environment files
-  data-processing.yml   Lightweight env for dataset conversion & stats
-
-getting_started/    User-facing guides
-  data_config.md        Modality config reference
-  data_preparation.md   Dataset preparation guide
-  finetune_new_embodiment.md
-
-tests/              pytest suite (markers: gpu / non-gpu)
-```
-
----
-
-## Quick-reference commands
-
-```bash
-# Lint and format
-pre-commit run --all-files
-
-# Run CPU tests
-python -m pytest tests/ -m "not gpu" -v --timeout=300
-
-# Run GPU tests
-python -m pytest tests/ -m gpu -v --timeout=300
-
-# Inference server
-python gr00t/eval/run_gr00t_server.py \
-    --model-path <checkpoint> \
-    --embodiment-tag new_embodiment \
-    --modality-config-path examples/G1-LocoManip/g1_locomanip_config.py
-```

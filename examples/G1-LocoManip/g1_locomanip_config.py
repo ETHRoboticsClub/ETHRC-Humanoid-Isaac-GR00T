@@ -55,14 +55,14 @@ g1_locomanip_config = {
         delta_indices=[0],
         modality_keys=["ego_view"],
     ),
-    # Proprioceptive state: all poses in rot6d — unconstrained, min-max normalization is safe.
+    # Proprioceptive state: EEF poses only — no global base position (unavailable on real robots).
     # Keys must match meta/modality.json "state" entries added by convert_eef_quat_to_rot6d.py.
     "state": ModalityConfig(
         delta_indices=[0],
         modality_keys=[
-            "left_eef_rot6d",   # (9,)  left xyz(3) + rot6d(6)
-            "right_eef_rot6d",  # (9,)  right xyz(3) + rot6d(6)
-            "robot_base_rot6d", # (9,)  base xyz(3) + rot6d(6)
+            "left_eef_rot6d",  # (9,)  left xyz(3) + rot6d(6)
+            "right_eef_rot6d", # (9,)  right xyz(3) + rot6d(6)
+            # robot_base_rot6d excluded: requires global localization, unavailable on real robots
         ],
     ),
     # Action: 32-step prediction horizon (1.6 s at 20 fps).
