@@ -191,13 +191,20 @@ python gr00t/data/stats.py \
 
 ### 4.5 Fine-tune
 
+Log in to W&B before launching (once per machine):
+
+```bash
+wandb login
+```
+
 ```bash
 source .venv/bin/activate
 
 bash examples/G1-LocoManip/finetune_g1_locomanip.sh \
     --base-model-path ./models/GR00T-N1.7-3B \
     --dataset-path    ./data/g1-locomanip-rot6d \
-    --output-dir      ./outputs/g1_locomanip
+    --output-dir      ./outputs/g1_locomanip \
+    --wandb-project   my-cluster-project
 ```
 
 Key env-var overrides:
