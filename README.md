@@ -15,8 +15,12 @@ Fine-tuning and deployment of [GR00T N1.7](https://huggingface.co/nvidia/GR00T-N
    - 4.3 [Download base model](#43-download-base-model)
    - 4.4 [Generate statistics](#44-generate-statistics)
    - 4.5 [Fine-tune](#45-fine-tune)
-5. [Adding a new robot](#5-adding-a-new-robot)
-6. [Directory layout](#6-directory-layout)
+5. [Real dataset — G1 + SONIC (3 cameras)](#5-real-dataset--g1--sonic-3-cameras)
+   - 5.1 [Dataset requirements](#51-dataset-requirements)
+   - 5.2 [Generate statistics](#52-generate-statistics)
+   - 5.3 [Fine-tune](#53-fine-tune)
+6. [Adding a new robot](#6-adding-a-new-robot)
+7. [Directory layout](#7-directory-layout)
 
 ---
 
@@ -203,6 +207,72 @@ bash examples/G1-LocoManip/finetune_g1_locomanip.sh \
     --dataset-path    ./data/g1-locomanip-rot6d \
     --output-dir      ./outputs/g1_locomanip \
     --wandb-project   my-cluster-project
+```
+
+Key env-var overrides:
+
+```bash
+NUM_GPUS=4              # multi-GPU training via torchrun
+MAX_STEPS=20000         # default: 10000
+GLOBAL_BATCH_SIZE=64    # default: 32
+USE_WANDB=0             # disable W&B logging
+```
+
+---
+
+## 5. Real dataset — G1 + SONIC (3 cameras)
+
+Fine-tuning GR00T N1.7 on a real collected G1 dataset using the SONIC whole-body controller with three cameras (head + both wrists).
+
+**Robot:** Unitree G1 + SONIC whole-body controller
+**Cameras:** ego\_view (head), left\_wrist, right\_wrist
+**Action space:** SONIC motion-token latents + hand joints (ABSOLUTE, 40-step horizon)
+**Config:** [examples/G1-SONIC-3cam/g1_sonic_3cam_config.py](examples/G1-SONIC-3cam/g1_sonic_3cam_config.py)
+
+No dataset conversion step is needed — the SONIC action space is already absolute, so there is no quaternion→rot6d conversion required.
+
+### 5.1 Dataset requirements
+
+The dataset must be in **LeRobot v2.1 format**. The `meta/modality.json` must declare the following keys under each modality:
+
+| Modality | Required keys |
+|---|---|
+| `video` | `ego_view`, `left_wrist`, `right_wrist` |
+| `state` | `left_leg`, `right_leg`, `waist`, `left_arm`, `right_arm`, `left_hand`, `right_hand`, `projected_gravity` |
+| `action` | `motion_token`, `left_hand_joints`, `right_hand_joints` |
+| `language` | `annotation.human.task_description` |
+
+These names must match exactly — they are the keys the config looks up at load time.
+
+### 5.2 Generate statistics
+
+```bash
+source .venv/bin/activate
+
+python gr00t/data/stats.py \
+    --dataset-path         ./datasets/your-g1-sonic-dataset \
+    --embodiment-tag       UNITREE_G1_SONIC \
+    --modality-config-path examples/G1-SONIC-3cam/g1_sonic_3cam_config.py
+```
+
+This writes `meta/stats.json` into the dataset folder. Re-run if you change `delta_indices` in the config.
+
+### 5.3 Fine-tune
+
+Log in to W&B if not already done:
+
+```bash
+wandb login
+```
+
+```bash
+source .venv/bin/activate
+
+bash examples/G1-SONIC-3cam/finetune_g1_sonic_3cam.sh \
+    --base-model-path ./models/GR00T-N1.7-3B \
+    --dataset-path    ./datasets/your-g1-sonic-dataset \
+    --output-dir      ./outputs/g1_sonic_3cam \
+    --wandb-project   my-project
 ```
 
 Key env-var overrides:
