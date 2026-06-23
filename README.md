@@ -108,8 +108,6 @@ conda activate gr00t-data
 # Log in if the dataset repo is private
 hf auth login
 
-cd /home/rguntz/Desktop/ETHRC-Humanoid-Isaac-GR00T
-
 hf download ETHRC-humanoid/g1-sim-locomanipulation \
     --repo-type dataset \
     --local-dir ./datasets/g1-sim-locomanipulation

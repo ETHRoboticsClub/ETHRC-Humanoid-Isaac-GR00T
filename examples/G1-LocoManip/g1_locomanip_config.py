@@ -50,9 +50,10 @@ from gr00t.data.types import (
 
 
 g1_locomanip_config = {
-    # Single ego-view RGB camera at the current timestep.
+    # Ego-view RGB camera: current frame + frame 15 steps ago (~0.75 s at 20 fps).
+    # Matches the [-15, 0] used in pretraining (DROID ~15 Hz → ~1 s history).
     "video": ModalityConfig(
-        delta_indices=[0],
+        delta_indices=[-15, 0],
         modality_keys=["ego_view"],
     ),
     # Proprioceptive state: EEF poses only — no global base position (unavailable on real robots).

@@ -7,9 +7,12 @@
 #
 # Usage:
 #   bash examples/G1-LocoManip/finetune_g1_locomanip.sh \
-#     --base-model-path <path|hf-repo> \
-#     --dataset-path    <local-path-to-dataset> \
-#     --output-dir      <output-dir> \
+#     --base-model-path   <path|hf-repo> \
+#     --dataset-path      <local-path-to-dataset> \
+#     --output-dir        <output-dir> \
+#     [--max-steps        <int>] \
+#     [--save-steps       <int>] \
+#     [--save-total-limit <int>] \
 #     [-- <extra launch_finetune.py args>]
 
 set -x -euo pipefail
@@ -18,8 +21,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 NUM_GPUS="${NUM_GPUS:-1}"
 MASTER_PORT="${MASTER_PORT:-29500}"
-SAVE_STEPS="${SAVE_STEPS:-1000}"
-MAX_STEPS="${MAX_STEPS:-10000}"
+SAVE_STEPS="${SAVE_STEPS:-5000}"
+SAVE_TOTAL_LIMIT="${SAVE_TOTAL_LIMIT:-0}"
+MAX_STEPS="${MAX_STEPS:-50000}"
 USE_WANDB="${USE_WANDB:-1}"
 DATALOADER_NUM_WORKERS="${DATALOADER_NUM_WORKERS:-4}"
 GLOBAL_BATCH_SIZE="${GLOBAL_BATCH_SIZE:-32}"
@@ -37,25 +41,31 @@ EXTRA_ARGS=()
 usage() {
     cat <<'EOF'
 Usage: bash examples/G1-LocoManip/finetune_g1_locomanip.sh \
-  --base-model-path <path>   HuggingFace repo or local checkpoint
-  --dataset-path    <path>   Local path to the downloaded LeRobot v2.1 dataset
-  --output-dir      <path>   Where to write checkpoints
-  [--experiment-name <name>]
-  [--wandb-project   <name>]
+  --base-model-path   <path>   HuggingFace repo or local checkpoint
+  --dataset-path      <path>   Local path to the downloaded LeRobot v2.1 dataset
+  --output-dir        <path>   Where to write checkpoints
+  [--experiment-name  <name>]
+  [--wandb-project    <name>]
+  [--max-steps        <int>]   Default: 150000 (~12 h at 3.3 it/s)
+  [--save-steps       <int>]   Default: 10000  (~50 min per checkpoint)
+  [--save-total-limit <int>]   Default: 2      (keep only N most recent checkpoints)
   [-- <extra launch_finetune.py args>...]
 EOF
 }
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --base-model-path)  BASE_MODEL_PATH="$2";  shift 2 ;;
-        --dataset-path)     DATASET_PATH="$2";     shift 2 ;;
-        --output-dir)       OUTPUT_DIR="$2";       shift 2 ;;
-        --experiment-name)  EXPERIMENT_NAME="$2";  shift 2 ;;
-        --wandb-project)    WANDB_PROJECT="$2";    shift 2 ;;
-        --help|-h)          usage; exit 0 ;;
-        --)                 shift; EXTRA_ARGS=("$@"); break ;;
-        *)                  echo "Unknown argument: $1" >&2; usage >&2; exit 1 ;;
+        --base-model-path)   BASE_MODEL_PATH="$2";   shift 2 ;;
+        --dataset-path)      DATASET_PATH="$2";      shift 2 ;;
+        --output-dir)        OUTPUT_DIR="$2";         shift 2 ;;
+        --experiment-name)   EXPERIMENT_NAME="$2";   shift 2 ;;
+        --wandb-project)     WANDB_PROJECT="$2";     shift 2 ;;
+        --max-steps)         MAX_STEPS="$2";         shift 2 ;;
+        --save-steps)        SAVE_STEPS="$2";        shift 2 ;;
+        --save-total-limit)  SAVE_TOTAL_LIMIT="$2";  shift 2 ;;
+        --help|-h)           usage; exit 0 ;;
+        --)                  shift; EXTRA_ARGS=("$@"); break ;;
+        *)                   echo "Unknown argument: $1" >&2; usage >&2; exit 1 ;;
     esac
 done
 
@@ -79,7 +89,7 @@ LAUNCH_CMD=(
     --num_gpus             "$NUM_GPUS"
     --output_dir           "$OUTPUT_DIR"
     --save_steps           "$SAVE_STEPS"
-    --save_total_limit     5
+    --save_total_limit     "$SAVE_TOTAL_LIMIT"
     --max_steps            "$MAX_STEPS"
     --warmup_ratio         0.05
     --weight_decay         1e-5
